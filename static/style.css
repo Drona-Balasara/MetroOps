@@ -1,0 +1,171 @@
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --text: #1b2733;
+  --muted: #5a6b7b;
+  --border: #d7dee5;
+  --accent: #0b5fa5;
+  --ok: #1f8f4e;
+  --pending: #c08a00;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: var(--accent);
+  color: #fff;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.status-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-dot--ok { background: var(--ok); }
+.status-dot--pending { background: var(--pending); }
+.status-dot--down { background: #c0392b; }
+
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.empty-state { color: var(--muted); margin: 0; }
+
+.note {
+  background: #eef4fb;
+  border-color: #cfe0f1;
+}
+
+.note p { margin: 0; color: var(--muted); }
+
+/* Incident reporting form */
+form { display: grid; gap: 1rem; }
+
+.field { display: grid; gap: 0.3rem; }
+
+.field--inline {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+label { font-weight: 600; font-size: 0.95rem; }
+
+input, select, textarea {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+}
+
+.field--inline input { width: auto; }
+
+input:focus, select:focus, textarea:focus, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  justify-self: start;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.2rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover { background: #094b84; }
+
+.form-message { margin: 0.75rem 0 0; font-size: 0.95rem; }
+.form-message--ok { color: var(--ok); }
+.form-message--error { color: #c0392b; }
+
+/* Incident list */
+.incident-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+
+.incident {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+}
+
+.incident-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #e4ebf2;
+  color: var(--muted);
+}
+
+.badge--safety { background: #fbe3e0; color: #c0392b; }
+
+.incident-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+
+.incident-label { color: var(--muted); font-size: 0.9rem; }
+
+@media (max-width: 520px) {
+  .incident-row { grid-template-columns: 1fr; gap: 0; }
+}

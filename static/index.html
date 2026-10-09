@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MetroOps Response</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>MetroOps Response</h1>
+    <div class="status" aria-live="polite">
+      <span id="status-dot" class="status-dot status-dot--pending" aria-hidden="true"></span>
+      <span id="status-text">Checking local system…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" aria-labelledby="report-heading">
+      <h2 id="report-heading">Report an incident</h2>
+      <form id="incident-form" novalidate>
+        <div class="field">
+          <label for="station">Station name</label>
+          <input id="station" name="station" type="text" maxlength="120" required>
+        </div>
+
+        <div class="field">
+          <label for="category">Category</label>
+          <select id="category" name="category" required>
+            <option value="Equipment Failure">Equipment Failure</option>
+            <option value="Passenger Safety">Passenger Safety</option>
+            <option value="Crowding">Crowding</option>
+            <option value="Service Disruption">Service Disruption</option>
+            <option value="Infrastructure">Infrastructure</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" rows="3" maxlength="2000" required></textarea>
+        </div>
+
+        <div class="field">
+          <label for="passengers">Estimated passengers affected</label>
+          <input id="passengers" name="passengers" type="number" min="0" step="1" value="0" required>
+        </div>
+
+        <div class="field field--inline">
+          <input id="safety" name="safety" type="checkbox">
+          <label for="safety">Immediate safety concern</label>
+        </div>
+
+        <button type="submit">Submit incident</button>
+      </form>
+      <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card" aria-labelledby="incidents-heading">
+      <h2 id="incidents-heading">Active incidents</h2>
+      <ul id="incident-list" class="incident-list" aria-live="polite"></ul>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
