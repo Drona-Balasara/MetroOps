@@ -360,5 +360,95 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual([r["id"] for r in self.repo.list_all()], [a["id"], b["id"]])
 
 
+class FailureResilienceTests(unittest.TestCase):
+    """Phase 6: the database layer must fail loudly, never report a false success."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self._tmp, "resl.db")
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _fields(self):
+        return dict(station="A", category="Crowding", description="d",
+                    passengers_affected=1, safety_concern=False)
+
+    def test_invalid_db_path_raises_not_silent(self):
+        # A path whose parent is an existing file cannot be opened as a database.
+        blocker = os.path.join(self._tmp, "afile")
+        with open(blocker, "w") as f:
+            f.write("x")
+        with self.assertRaises((sqlite3.OperationalError, OSError)):
+            IncidentRepo(os.path.join(blocker, "nested.db"))
+
+    def test_write_failure_surfaces_and_reports_no_success(self):
+        repo = IncidentRepo(self.path)
+        repo.create(self._fields(), {"score": 1})
+        # Database becomes unusable (table dropped underneath it): writes must raise.
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("DROP TABLE incidents")
+        with self.assertRaises(sqlite3.OperationalError):
+            repo.create(self._fields(), {"score": 1})
+        with self.assertRaises(sqlite3.OperationalError):
+            repo.list_all()
+
+    def test_html_like_description_stored_verbatim(self):
+        # Backend stores untrusted text as-is; the frontend renders it with
+        # textContent, so storage must neither mangle nor interpret it.
+        repo = IncidentRepo(self.path)
+        payload = '<img src=x onerror="alert(1)">'
+        rec = repo.create({**self._fields(), "description": payload}, {"score": 1})
+        self.assertEqual(repo.get(rec["id"])["description"], payload)
+
+
+class ApiResilienceTests(unittest.TestCase):
+    """Phase 6: API/workflow edge cases on top of the persisted store."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        main.repo = IncidentRepo(os.path.join(self._tmp, "api.db"))
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _create(self, **over):
+        base = dict(station="A", category=Category.crowding, description="d",
+                    passengers_affected=1, safety_concern=False)
+        return main.create_incident(IncidentIn(**{**base, **over}))
+
+    def test_repeated_submissions_are_distinct_and_persist(self):
+        a, b = self._create(), self._create()
+        self.assertNotEqual(a["id"], b["id"])
+        self.assertEqual([i["id"] for i in main.list_incidents()], [a["id"], b["id"]])
+
+    def test_stale_or_concurrent_update_returns_409(self):
+        rec = self._create()
+        # Force the compare-and-swap to miss, as a lost race would.
+        orig = main.repo.apply_transition
+        main.repo.apply_transition = lambda *a, **k: False
+        try:
+            with self.assertRaises(HTTPException) as ctx:
+                main.update_status(rec["id"], StatusUpdate(status=IncidentStatus.acknowledged))
+            self.assertEqual(ctx.exception.status_code, 409)
+        finally:
+            main.repo.apply_transition = orig
+
+    def test_persisted_analysis_matches_engine(self):
+        inc = IncidentIn(station="Thaltej", category=Category.passenger_safety,
+                         description="x", passengers_affected=250, safety_concern=True)
+        rec = main.create_incident(inc)
+        # Scoring must survive the JSON round-trip through SQLite unchanged.
+        self.assertEqual(rec["analysis"], engine.analyze(inc.model_dump(mode="json")))
+
+    def test_illegal_transition_leaves_record_untouched(self):
+        rec = self._create()
+        with self.assertRaises(HTTPException):
+            main.update_status(rec["id"], StatusUpdate(status=IncidentStatus.resolved))
+        after = main.repo.get(rec["id"])
+        self.assertEqual(after["status"], "Active")
+        self.assertEqual(len(after["history"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
