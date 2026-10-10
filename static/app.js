@@ -167,6 +167,7 @@ function readValidationErrors(data) {
 
 async function updateStatus(id, status, button, msg) {
   button.disabled = true;
+  button.setAttribute("aria-busy", "true");
   msg.className = "status-msg";
   msg.textContent = "";
   try {
@@ -180,6 +181,7 @@ async function updateStatus(id, status, button, msg) {
       msg.classList.add("status-msg--error");
       msg.textContent = typeof data.detail === "string" ? data.detail : "Status update failed.";
       button.disabled = false;
+      button.removeAttribute("aria-busy");
       return;
     }
     loadIncidents();  // re-render with new status, history and controls
@@ -187,6 +189,7 @@ async function updateStatus(id, status, button, msg) {
     msg.classList.add("status-msg--error");
     msg.textContent = "Network error. Could not reach the local server.";
     button.disabled = false;
+    button.removeAttribute("aria-busy");
   }
 }
 
@@ -207,6 +210,7 @@ async function submitIncident(event) {
   };
 
   button.disabled = true;
+  button.setAttribute("aria-busy", "true");
   try {
     const res = await fetch("/incidents", {
       method: "POST",
@@ -229,6 +233,7 @@ async function submitIncident(event) {
     message.textContent = "Network error. Could not reach the local server.";
   } finally {
     button.disabled = false;
+    button.removeAttribute("aria-busy");
   }
 }
 
@@ -236,3 +241,27 @@ document.getElementById("incident-form").addEventListener("submit", submitIncide
 document.getElementById("status-filter").addEventListener("change", applyFilter);
 checkStatus();
 loadIncidents();
+
+// --- Application shell: live UTC clock + mobile navigation drawer ---
+function tickClock() {
+  const el = document.getElementById("utc-clock");
+  if (!el) return;
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  el.textContent = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} UTC`;
+  el.dateTime = d.toISOString();
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+const sidebar = document.getElementById("sidebar");
+const menuToggle = document.getElementById("menu-toggle");
+const scrim = document.getElementById("sidebar-scrim");
+function setNav(open) {
+  sidebar.classList.toggle("is-open", open);
+  scrim.hidden = !open;
+  menuToggle.setAttribute("aria-expanded", String(open));
+  menuToggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+}
+menuToggle.addEventListener("click", () => setNav(!sidebar.classList.contains("is-open")));
+scrim.addEventListener("click", () => setNav(false));

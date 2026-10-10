@@ -3,75 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MetroOps Response</title>
+  <meta name="color-scheme" content="dark">
+  <title>MetroOps Response — Operations Console</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header class="site-header">
-    <h1>MetroOps Response</h1>
-    <div class="status" aria-live="polite">
-      <span id="status-dot" class="status-dot status-dot--pending" aria-hidden="true"></span>
-      <span id="status-text">Checking local system…</span>
-    </div>
-  </header>
-
-  <main>
-    <section class="card" aria-labelledby="report-heading">
-      <h2 id="report-heading">Report an incident</h2>
-      <form id="incident-form" novalidate>
-        <div class="field">
-          <label for="station">Station name</label>
-          <input id="station" name="station" type="text" maxlength="120" required>
-        </div>
-
-        <div class="field">
-          <label for="category">Category</label>
-          <select id="category" name="category" required>
-            <option value="Equipment Failure">Equipment Failure</option>
-            <option value="Passenger Safety">Passenger Safety</option>
-            <option value="Crowding">Crowding</option>
-            <option value="Service Disruption">Service Disruption</option>
-            <option value="Infrastructure">Infrastructure</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="description">Description</label>
-          <textarea id="description" name="description" rows="3" maxlength="2000" required></textarea>
-        </div>
-
-        <div class="field">
-          <label for="passengers">Estimated passengers affected</label>
-          <input id="passengers" name="passengers" type="number" min="0" step="1" value="0" required>
-        </div>
-
-        <div class="field field--inline">
-          <input id="safety" name="safety" type="checkbox">
-          <label for="safety">Immediate safety concern</label>
-        </div>
-
-        <button type="submit">Submit incident</button>
-      </form>
-      <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
-    </section>
-
-    <section class="card" aria-labelledby="incidents-heading">
-      <h2 id="incidents-heading">Incidents</h2>
-      <div class="field">
-        <label for="status-filter">Filter by status</label>
-        <select id="status-filter">
-          <option value="">All statuses</option>
-          <option value="Active">Active</option>
-          <option value="Acknowledged">Acknowledged</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Resolved">Resolved</option>
-        </select>
+  <a class="skip-link" href="#workspace">Skip to main content</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <svg class="brand-mark" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/>
+          <rect x="4" y="10.4" width="16" height="3.2" rx="0.4" fill="currentColor"/>
+        </svg>
+        <span class="brand-name">MetroOps<span class="brand-sub">Response</span></span>
       </div>
-      <ul id="incident-list" class="incident-list" aria-live="polite"></ul>
-    </section>
-  </main>
+      <nav class="nav" aria-label="Sections">
+        <a class="nav-item is-active" href="#workspace" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+          <span>Incidents</span>
+        </a>
+        <span class="nav-item is-disabled" aria-disabled="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Overview</span><span class="nav-tag">Soon</span>
+        </span>
+        <span class="nav-item is-disabled" aria-disabled="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="5" r="2.4"/><circle cx="19" cy="19" r="2.4"/><path d="M7 11 17 6M7 13l10 5"/></svg>
+          <span>Network</span><span class="nav-tag">Soon</span>
+        </span>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="status" aria-live="polite">
+          <span id="status-dot" class="status-dot status-dot--pending" aria-hidden="true"></span>
+          <span id="status-text">Checking local system…</span>
+        </div>
+        <p class="sidebar-note">Local · offline-first · advisory scoring</p>
+      </div>
+    </aside>
+    <div class="app-body">
+      <header class="topbar">
+        <button class="icon-btn menu-toggle" id="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <div class="topbar-title">
+          <h1>Incidents</h1>
+          <p class="topbar-crumb">Operations console</p>
+        </div>
+        <div class="topbar-actions">
+          <span class="clock" title="Coordinated Universal Time">
+            <span class="clock-dot" aria-hidden="true"></span>
+            <time id="utc-clock" datetime="">--:--:-- UTC</time>
+          </span>
+          <a class="btn btn--primary" href="#incident-form">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+            Report incident
+          </a>
+        </div>
+      </header>
 
+      <main class="workspace" id="workspace" tabindex="-1">
+        <section class="panel" aria-labelledby="report-heading">
+          <div class="panel-head">
+            <h2 id="report-heading" class="panel-title">Report an incident</h2>
+            <p class="panel-desc">Log a new incident. The server scores its priority from the details you provide.</p>
+          </div>
+          <div class="panel-body">
+            <form id="incident-form" class="form" novalidate>
+              <div class="field">
+                <label for="station">Station or location</label>
+                <input id="station" name="station" class="input" type="text" maxlength="120" autocomplete="off" required>
+              </div>
+              <div class="field">
+                <label for="category">Category</label>
+                <select id="category" name="category" class="select" required>
+                  <option value="Equipment Failure">Equipment Failure</option>
+                  <option value="Passenger Safety">Passenger Safety</option>
+                  <option value="Crowding">Crowding</option>
+                  <option value="Service Disruption">Service Disruption</option>
+                  <option value="Infrastructure">Infrastructure</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="description">What happened</label>
+                <textarea id="description" name="description" class="textarea" rows="3" maxlength="2000" required></textarea>
+                <p class="field-hint">Describe it plainly. Shown to responders exactly as written.</p>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="passengers">Passengers affected (estimate)</label>
+                  <input id="passengers" name="passengers" class="input" type="number" min="0" step="1" value="0" required>
+                </div>
+                <div class="field field--check">
+                  <label class="check" for="safety">
+                    <input id="safety" name="safety" type="checkbox" class="checkbox">
+                    <span>Immediate safety concern</span>
+                  </label>
+                  <p class="field-hint">Floors priority to at least High.</p>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn--primary">Submit incident</button>
+              </div>
+            </form>
+            <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="incidents-heading">
+          <div class="panel-head panel-head--row">
+            <div>
+              <h2 id="incidents-heading" class="panel-title">Incident queue</h2>
+              <p class="panel-desc">Newest first. Advance each incident through its response workflow.</p>
+            </div>
+            <div class="field field--compact">
+              <label for="status-filter">Filter by status</label>
+              <select id="status-filter" class="select">
+                <option value="">All statuses</option>
+                <option value="Active">Active</option>
+                <option value="Acknowledged">Acknowledged</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+              </select>
+            </div>
+          </div>
+          <ul id="incident-list" class="incident-list" aria-live="polite"></ul>
+        </section>
+      </main>
+    </div>
+  </div>
+  <div class="sidebar-scrim" id="sidebar-scrim" hidden></div>
   <script src="/static/app.js"></script>
 </body>
 </html>
