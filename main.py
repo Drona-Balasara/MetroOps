@@ -8,6 +8,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
+import incident_engine
+
 BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -62,5 +64,6 @@ def create_incident(incident: IncidentIn) -> dict:
         "status": "Active",
         **incident.model_dump(mode="json"),
     }
+    record["analysis"] = incident_engine.analyze(record)
     _incidents.append(record)
     return record

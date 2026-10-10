@@ -157,6 +157,15 @@ button:hover { background: #094b84; }
 
 .badge--safety { background: #fbe3e0; color: #c0392b; }
 
+.badge--sev { color: #fff; }
+.badge--low { background: #5a6b7b; }
+.badge--medium { background: #c08a00; }
+.badge--high { background: #d35400; }
+.badge--critical { background: #c0392b; }
+
+.actions { margin: 0; padding-left: 1.1rem; }
+.actions li { font-size: 0.9rem; }
+
 .incident-row {
   display: grid;
   grid-template-columns: 11rem 1fr;

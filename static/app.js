@@ -50,6 +50,13 @@ function renderIncidents(incidents) {
     badge.className = "badge";
     badge.textContent = inc.status;
     head.append(id, badge);
+    const sev = inc.analysis?.severity;
+    if (sev) {
+      const sevBadge = document.createElement("span");
+      sevBadge.className = `badge badge--sev badge--${sev.toLowerCase()}`;
+      sevBadge.textContent = `${sev} · ${inc.analysis.score}/100`;
+      head.append(sevBadge);
+    }
     if (inc.safety_concern) {
       const safety = document.createElement("span");
       safety.className = "badge badge--safety";
@@ -63,6 +70,23 @@ function renderIncidents(incidents) {
     item.append(row("Description", inc.description));
     item.append(row("Passengers affected", String(inc.passengers_affected)));
     item.append(row("Reported", new Date(inc.created_at).toLocaleString()));
+    if (inc.analysis) {
+      item.append(row("Why", inc.analysis.summary));
+      const actionsWrap = document.createElement("div");
+      actionsWrap.className = "incident-row";
+      const al = document.createElement("span");
+      al.className = "incident-label";
+      al.textContent = "Recommended (decision support)";
+      const ul = document.createElement("ul");
+      ul.className = "actions";
+      for (const a of inc.analysis.recommended_actions || []) {
+        const li = document.createElement("li");
+        li.textContent = a;
+        ul.append(li);
+      }
+      actionsWrap.append(al, ul);
+      item.append(actionsWrap);
+    }
     list.append(item);
   }
 }
