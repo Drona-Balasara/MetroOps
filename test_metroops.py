@@ -4,15 +4,26 @@ Run: .venv/Scripts/python.exe -m unittest -v
 Uses only the standard library (unittest). The API is exercised by calling the
 route functions directly, since httpx (required by Starlette's TestClient) is
 not installed and Phase 3 adds no dependencies.
+
+Every test runs against a TEMPORARY SQLite database, never the real data/ file:
+METROOPS_DB is pointed at a throwaway path before main is imported, and the
+persistence tests build their own IncidentRepo on temp paths.
 """
 
+import os
+import shutil
+import sqlite3
+import tempfile
 import unittest
+
+os.environ["METROOPS_DB"] = os.path.join(tempfile.mkdtemp(), "import.db")
 
 from pydantic import ValidationError
 from fastapi import HTTPException
 
 import incident_engine as engine
 import main
+from incident_repo import IncidentRepo
 from main import IncidentIn, Category, StatusUpdate, IncidentStatus
 
 
@@ -135,7 +146,11 @@ class EngineMalformedInputTests(unittest.TestCase):
 
 class ApiIntegrationTests(unittest.TestCase):
     def setUp(self):
-        main._incidents.clear()
+        self._tmp = tempfile.mkdtemp()
+        main.repo = IncidentRepo(os.path.join(self._tmp, "test.db"))
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
 
     def test_health_unchanged(self):
         self.assertEqual(main.health(), {"status": "ok"})
@@ -193,11 +208,15 @@ class ValidationTests(unittest.TestCase):
 
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
-        main._incidents.clear()
+        self._tmp = tempfile.mkdtemp()
+        main.repo = IncidentRepo(os.path.join(self._tmp, "test.db"))
         self.rec = main.create_incident(IncidentIn(
             station="A", category=Category.crowding, description="busy",
             passengers_affected=10, safety_concern=False))
         self.id = self.rec["id"]
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
 
     def _patch(self, status):
         return main.update_status(self.id, StatusUpdate(status=status))
@@ -213,12 +232,12 @@ class WorkflowTests(unittest.TestCase):
         for nxt in ("Acknowledged", "In Progress", "Resolved"):
             out = self._patch(nxt)
             self.assertEqual(out["status"], nxt)
-        self.assertEqual([h["to"] for h in self.rec["history"]],
+        self.assertEqual([h["to"] for h in main.repo.get(self.id)["history"]],
                          ["Active", "Acknowledged", "In Progress", "Resolved"])
 
     def test_history_records_from_to_and_time(self):
         self._patch("Acknowledged")
-        last = self.rec["history"][-1]
+        last = main.repo.get(self.id)["history"][-1]
         self.assertEqual(last["from"], "Active")
         self.assertEqual(last["to"], "Acknowledged")
         self.assertTrue(last["at"])
@@ -227,7 +246,7 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             self._patch("In Progress")  # Active -> In Progress skips Acknowledged
         self.assertEqual(ctx.exception.status_code, 409)
-        self.assertEqual(self.rec["status"], "Active")  # unchanged
+        self.assertEqual(main.repo.get(self.id)["status"], "Active")  # unchanged
 
     def test_reject_direct_resolve(self):
         with self.assertRaises(HTTPException) as ctx:
@@ -259,7 +278,86 @@ class WorkflowTests(unittest.TestCase):
     def test_scoring_unchanged_by_workflow(self):
         before = dict(self.rec["analysis"])
         self._patch("Acknowledged")
-        self.assertEqual(self.rec["analysis"], before)
+        self.assertEqual(main.repo.get(self.id)["analysis"], before)
+
+
+class PersistenceTests(unittest.TestCase):
+    """SQLite-specific behaviour: init, round-trips, transactions, restart."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self._tmp, "persist.db")
+        self.repo = IncidentRepo(self.path)
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _fields(self, **over):
+        base = dict(station="Stn", category="Crowding", description="busy",
+                    passengers_affected=10, safety_concern=False)
+        base.update(over)
+        return base
+
+    def test_init_creates_schema_file(self):
+        self.assertTrue(os.path.exists(self.path))
+        with sqlite3.connect(self.path) as conn:
+            tables = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertIn("incidents", tables)
+        self.assertIn("status_history", tables)
+
+    def test_create_and_retrieve_round_trip(self):
+        rec = self.repo.create(self._fields(safety_concern=True), {"score": 42, "severity": "MEDIUM"})
+        got = self.repo.get(rec["id"])
+        self.assertEqual(got["id"], rec["id"])
+        self.assertEqual(got["station"], "Stn")
+        self.assertEqual(got["safety_concern"], True)          # stored 1 -> bool
+        self.assertEqual(got["analysis"], {"score": 42, "severity": "MEDIUM"})
+        self.assertEqual(got["status"], "Active")
+        self.assertEqual(got["history"], [{"from": None, "to": "Active", "at": rec["created_at"]}])
+
+    def test_status_and_history_persist(self):
+        rec = self.repo.create(self._fields(), {"score": 1})
+        self.assertTrue(self.repo.apply_transition(rec["id"], "Active", "Acknowledged"))
+        got = self.repo.get(rec["id"])
+        self.assertEqual(got["status"], "Acknowledged")
+        self.assertEqual([h["to"] for h in got["history"]], ["Active", "Acknowledged"])
+        self.assertEqual(got["history"][-1]["from"], "Active")
+
+    def test_transition_compare_and_swap_guards_stale_state(self):
+        rec = self.repo.create(self._fields(), {"score": 1})
+        # expected_current no longer matches -> refused, nothing written.
+        self.assertFalse(self.repo.apply_transition(rec["id"], "Resolved", "Acknowledged"))
+        got = self.repo.get(rec["id"])
+        self.assertEqual(got["status"], "Active")
+        self.assertEqual(len(got["history"]), 1)
+
+    def test_transaction_rolls_back_on_failed_history_insert(self):
+        rec = self.repo.create(self._fields(), {"score": 1})
+        # An invalid target status trips the CHECK constraint during the UPDATE,
+        # so the whole transaction must roll back: status and history unchanged.
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.repo.apply_transition(rec["id"], "Active", "Bogus")
+        got = self.repo.get(rec["id"])
+        self.assertEqual(got["status"], "Active")
+        self.assertEqual(len(got["history"]), 1)
+
+    def test_data_survives_reconnection(self):
+        rec = self.repo.create(self._fields(), {"score": 7})
+        self.repo.apply_transition(rec["id"], "Active", "Acknowledged")
+        # A fresh repo on the same file simulates an application restart.
+        reopened = IncidentRepo(self.path)
+        got = reopened.get(rec["id"])
+        self.assertEqual(got["status"], "Acknowledged")
+        self.assertEqual(got["analysis"], {"score": 7})
+        self.assertEqual([h["to"] for h in got["history"]], ["Active", "Acknowledged"])
+        self.assertEqual(len(reopened.list_all()), 1)
+
+    def test_ids_are_unique_and_sequential(self):
+        a = self.repo.create(self._fields(), {"score": 1})
+        b = self.repo.create(self._fields(), {"score": 1})
+        self.assertNotEqual(a["id"], b["id"])
+        self.assertEqual([r["id"] for r in self.repo.list_all()], [a["id"], b["id"]])
 
 
 if __name__ == "__main__":

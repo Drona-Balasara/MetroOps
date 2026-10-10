@@ -39,7 +39,7 @@ function renderIncidents(incidents) {
   if (incidents.length === 0) {
     const empty = document.createElement("li");
     empty.className = "empty-state";
-    empty.textContent = "No active incidents. The system is ready.";
+    empty.textContent = "No incidents to show.";
     list.append(empty);
     return;
   }
@@ -54,7 +54,7 @@ function renderIncidents(incidents) {
     const id = document.createElement("strong");
     id.textContent = inc.id;
     const badge = document.createElement("span");
-    badge.className = "badge";
+    badge.className = `badge badge--status status--${inc.status.toLowerCase().replace(/\s+/g, "-")}`;
     badge.textContent = inc.status;
     head.append(id, badge);
     const sev = inc.analysis?.severity;
@@ -132,12 +132,21 @@ function renderIncidents(incidents) {
   }
 }
 
+let allIncidents = [];
+
+// Re-renders the list honoring the current status filter (empty value = all).
+function applyFilter() {
+  const want = document.getElementById("status-filter").value;
+  renderIncidents(want ? allIncidents.filter((i) => i.status === want) : allIncidents);
+}
+
 async function loadIncidents() {
   const list = document.getElementById("incident-list");
   try {
     const res = await fetch("/incidents");
     if (!res.ok) throw new Error("bad status");
-    renderIncidents(await res.json());
+    allIncidents = await res.json();
+    applyFilter();
   } catch {
     list.textContent = "";
     const err = document.createElement("li");
@@ -224,5 +233,6 @@ async function submitIncident(event) {
 }
 
 document.getElementById("incident-form").addEventListener("submit", submitIncident);
+document.getElementById("status-filter").addEventListener("change", applyFilter);
 checkStatus();
 loadIncidents();

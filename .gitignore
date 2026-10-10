@@ -8,8 +8,9 @@ __pycache__/
 # Secrets
 .env
 
-# Generated databases
+# Generated databases (and sqlite journal/wal/shm sidecar files)
 data/*.db
+data/*.db-*
 
 # Local tooling state
 .claude/

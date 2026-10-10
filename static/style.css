@@ -163,6 +163,13 @@ button:hover { background: #094b84; }
 .badge--high { background: #d35400; }
 .badge--critical { background: #c0392b; }
 
+/* Status badges: distinct colour per lifecycle stage so operators can scan them. */
+.badge--status { color: #fff; }
+.status--active { background: #0b5fa5; }
+.status--acknowledged { background: #c08a00; }
+.status--in-progress { background: #6b4ea0; }
+.status--resolved { background: #1f8f4e; }
+
 .actions { margin: 0; padding-left: 1.1rem; }
 .actions li { font-size: 0.9rem; }
 

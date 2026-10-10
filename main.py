@@ -1,6 +1,4 @@
-from datetime import datetime, timezone
 from enum import Enum
-from itertools import count
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -9,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 import incident_engine
+from incident_repo import IncidentRepo
 
 BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
@@ -17,9 +16,9 @@ app = FastAPI(title="MetroOps Response")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# In-memory store for this phase; replaced by a database in a later phase.
-_incidents: list[dict] = []
-_id_counter = count(1)
+# Single source of truth: a local SQLite file (path from METROOPS_DB, else data/).
+# Schema is created here at startup. Tests swap this out for a temporary database.
+repo = IncidentRepo()
 
 
 class Category(str, Enum):
@@ -75,26 +74,19 @@ def health() -> dict:
 
 @app.get("/incidents")
 def list_incidents() -> list[dict]:
-    return _incidents
+    return repo.list_all()
 
 
 @app.post("/incidents", status_code=201)
 def create_incident(incident: IncidentIn) -> dict:
-    record = {
-        "id": f"INC-{next(_id_counter):04d}",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "status": "Active",
-        **incident.model_dump(mode="json"),
-    }
-    record["analysis"] = incident_engine.analyze(record)
-    record["history"] = [{"from": None, "to": record["status"], "at": record["created_at"]}]
-    _incidents.append(record)
-    return record
+    fields = incident.model_dump(mode="json")
+    analysis = incident_engine.analyze(fields)
+    return repo.create(fields, analysis)
 
 
 @app.patch("/incidents/{incident_id}/status")
 def update_status(incident_id: str, update: StatusUpdate) -> dict:
-    record = next((r for r in _incidents if r["id"] == incident_id), None)
+    record = repo.get(incident_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
 
@@ -102,6 +94,6 @@ def update_status(incident_id: str, update: StatusUpdate) -> dict:
     if new not in ALLOWED_TRANSITIONS.get(current, set()):
         raise HTTPException(status_code=409, detail=f"Cannot change status from '{current}' to '{new}'")
 
-    record["status"] = new
-    record["history"].append({"from": current, "to": new, "at": datetime.now(timezone.utc).isoformat()})
-    return record
+    if not repo.apply_transition(incident_id, current, new):
+        raise HTTPException(status_code=409, detail="Status changed concurrently; please retry")
+    return repo.get(incident_id)
