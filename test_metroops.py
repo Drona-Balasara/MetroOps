@@ -9,10 +9,11 @@ not installed and Phase 3 adds no dependencies.
 import unittest
 
 from pydantic import ValidationError
+from fastapi import HTTPException
 
 import incident_engine as engine
 import main
-from main import IncidentIn, Category
+from main import IncidentIn, Category, StatusUpdate, IncidentStatus
 
 
 def make(category="Crowding", passengers=0, safety=False, description="desc", station="Stn"):
@@ -188,6 +189,77 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             IncidentIn(station="   ", category=Category.other, description="x",
                        passengers_affected=1, safety_concern=False)
+
+
+class WorkflowTests(unittest.TestCase):
+    def setUp(self):
+        main._incidents.clear()
+        self.rec = main.create_incident(IncidentIn(
+            station="A", category=Category.crowding, description="busy",
+            passengers_affected=10, safety_concern=False))
+        self.id = self.rec["id"]
+
+    def _patch(self, status):
+        return main.update_status(self.id, StatusUpdate(status=status))
+
+    def test_starts_active_with_seeded_history(self):
+        self.assertEqual(self.rec["status"], "Active")
+        self.assertEqual(len(self.rec["history"]), 1)
+        self.assertEqual(self.rec["history"][0]["from"], None)
+        self.assertEqual(self.rec["history"][0]["to"], "Active")
+        self.assertEqual(self.rec["history"][0]["at"], self.rec["created_at"])
+
+    def test_full_allowed_lifecycle(self):
+        for nxt in ("Acknowledged", "In Progress", "Resolved"):
+            out = self._patch(nxt)
+            self.assertEqual(out["status"], nxt)
+        self.assertEqual([h["to"] for h in self.rec["history"]],
+                         ["Active", "Acknowledged", "In Progress", "Resolved"])
+
+    def test_history_records_from_to_and_time(self):
+        self._patch("Acknowledged")
+        last = self.rec["history"][-1]
+        self.assertEqual(last["from"], "Active")
+        self.assertEqual(last["to"], "Acknowledged")
+        self.assertTrue(last["at"])
+
+    def test_reject_skip_transition(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._patch("In Progress")  # Active -> In Progress skips Acknowledged
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(self.rec["status"], "Active")  # unchanged
+
+    def test_reject_direct_resolve(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._patch("Resolved")
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_reject_backward_transition(self):
+        self._patch("Acknowledged")
+        with self.assertRaises(HTTPException) as ctx:
+            self._patch("Active")
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_reject_change_after_resolved(self):
+        for nxt in ("Acknowledged", "In Progress", "Resolved"):
+            self._patch(nxt)
+        with self.assertRaises(HTTPException) as ctx:
+            self._patch("Acknowledged")
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_nonexistent_incident_404(self):
+        with self.assertRaises(HTTPException) as ctx:
+            main.update_status("INC-9999", StatusUpdate(status=IncidentStatus.acknowledged))
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_invalid_status_value_rejected(self):
+        with self.assertRaises(ValidationError):
+            StatusUpdate(status="Nonsense")
+
+    def test_scoring_unchanged_by_workflow(self):
+        before = dict(self.rec["analysis"])
+        self._patch("Acknowledged")
+        self.assertEqual(self.rec["analysis"], before)
 
 
 if __name__ == "__main__":

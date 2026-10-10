@@ -166,6 +166,35 @@ button:hover { background: #094b84; }
 .actions { margin: 0; padding-left: 1.1rem; }
 .actions li { font-size: 0.9rem; }
 
+.history { margin: 0; padding-left: 1.1rem; }
+.history li { font-size: 0.9rem; color: var(--muted); }
+
+.incident-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.btn-sm {
+  justify-self: start;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-sm:hover { background: #094b84; }
+.btn-sm:disabled { opacity: 0.6; cursor: default; }
+
+.status-msg { font-size: 0.9rem; }
+.status-msg--error { color: #c0392b; }
+
 .incident-row {
   display: grid;
   grid-template-columns: 11rem 1fr;

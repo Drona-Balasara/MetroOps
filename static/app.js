@@ -13,6 +13,13 @@ async function checkStatus() {
   }
 }
 
+// Mirrors the server lifecycle: one forward step per status (see ALLOWED_TRANSITIONS).
+const NEXT_ACTION = {
+  "Active": { status: "Acknowledged", label: "Acknowledge" },
+  "Acknowledged": { status: "In Progress", label: "Mark in progress" },
+  "In Progress": { status: "Resolved", label: "Resolve" },
+};
+
 function row(label, value) {
   const li = document.createElement("div");
   li.className = "incident-row";
@@ -87,6 +94,40 @@ function renderIncidents(incidents) {
       actionsWrap.append(al, ul);
       item.append(actionsWrap);
     }
+
+    if (Array.isArray(inc.history) && inc.history.length) {
+      const histWrap = document.createElement("div");
+      histWrap.className = "incident-row";
+      const hl = document.createElement("span");
+      hl.className = "incident-label";
+      hl.textContent = "Status history";
+      const hul = document.createElement("ul");
+      hul.className = "history";
+      for (const h of inc.history) {
+        const li = document.createElement("li");
+        const when = new Date(h.at).toLocaleString();
+        li.textContent = h.from ? `${h.from} → ${h.to} (${when})` : `${h.to} (${when})`;
+        hul.append(li);
+      }
+      histWrap.append(hl, hul);
+      item.append(histWrap);
+    }
+
+    const next = NEXT_ACTION[inc.status];
+    if (next) {
+      const controls = document.createElement("div");
+      controls.className = "incident-controls";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-sm";
+      btn.textContent = next.label;
+      const msg = document.createElement("span");
+      msg.className = "status-msg";
+      btn.addEventListener("click", () => updateStatus(inc.id, next.status, btn, msg));
+      controls.append(btn, msg);
+      item.append(controls);
+    }
+
     list.append(item);
   }
 }
@@ -113,6 +154,31 @@ function readValidationErrors(data) {
       .join("; ");
   }
   return data?.detail || "Submission failed.";
+}
+
+async function updateStatus(id, status, button, msg) {
+  button.disabled = true;
+  msg.className = "status-msg";
+  msg.textContent = "";
+  try {
+    const res = await fetch(`/incidents/${encodeURIComponent(id)}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.classList.add("status-msg--error");
+      msg.textContent = typeof data.detail === "string" ? data.detail : "Status update failed.";
+      button.disabled = false;
+      return;
+    }
+    loadIncidents();  // re-render with new status, history and controls
+  } catch {
+    msg.classList.add("status-msg--error");
+    msg.textContent = "Network error. Could not reach the local server.";
+    button.disabled = false;
+  }
 }
 
 async function submitIncident(event) {
